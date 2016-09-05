@@ -1,8 +1,8 @@
 {
-    "name": "Minner data application",
+    "name": "miner data application",
     "license": "MIT",
     "type": "project",
-    "description": "Minner data application",
+    "description": "miner data application",
     "autoload": {
         "psr-4": { "": "src/" },
         "classmap": [ "app/AppKernel.php", "app/AppCache.php" ]

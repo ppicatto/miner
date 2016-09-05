@@ -65,7 +65,7 @@ swiftmailer:
     spool:     { type: memory }
 
 nelmio_api_doc:
-    name: Minner API documentation
+    name: miner API documentation
 
 # SensioFrameworkExtra Configuration
 sensio_framework_extra:
