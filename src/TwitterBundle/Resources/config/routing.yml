@@ -1,0 +1,3 @@
+twitter_homepage:
+    path:     /
+    defaults: { _controller: TwitterBundle:Default:index }

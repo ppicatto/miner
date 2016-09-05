@@ -1,0 +1,3 @@
+twitter_api:
+    type: rest
+    resource: TwitterBundle\Controller\Rest\ApiController

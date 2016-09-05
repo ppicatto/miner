@@ -1,0 +1,11 @@
+NelmioApiDocBundle:
+    resource: "@NelmioApiDocBundle/Resources/config/routing.yml"
+    prefix:   /doc
+
+twitter:
+    resource: "@TwitterBundle/Resources/config/routing.yml"
+    prefix:   /twitter
+
+twitter_api:
+    resource: "@TwitterBundle/Resources/config/api_routing.yml"
+    prefix:   /api/twitter
