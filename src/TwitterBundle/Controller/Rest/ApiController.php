@@ -26,7 +26,6 @@ class ApiController extends FOSRestController
     private $config = [];
     private $url = [
         'base_api' => 'https://api.twitter.com/1.1/search/tweets.json',
-        'base' => 'https://twitter.com/search?q=%23YaMeCanse%20since%3A2014-11-01%20until%3A2015-01-01%20include%3Aretweets&src=typd',
         'param' => null
     ];
 
@@ -67,25 +66,23 @@ class ApiController extends FOSRestController
      */
     public function getApiTweeterAction(Request $request)
     {
-
+        $hashtag = explode(',', $request->get("hashtag"));
+        $hashtag = '%23' . implode( '%28OR%28%23', $hashtag );
+        $baseUrl = 'https://twitter.com/search?f=tweets&vertical=default&q='.$hashtag.'%20since%3A'.$request->get("dateFrom").'%20until%3A'.$request->get("dateTo").'%20include%3Aretweets&src=typd&count='.$request->get("max");
         $client = new Client();
-        $response = [];
-        $crawler = $client->request('GET', $this->url['base']);
-        $response = $this->parseTweets($crawler);
-        for ($i=0; $i<=4; $i++) {
+        dump($baseUrl);
+        $crawler = $client->request('GET', $baseUrl);
+        $newTweets = $this->parseTweets($crawler);
+        $response = $newTweets;
+        while ($newTweets) {
             sleep(1);
-            $client->request("GET", 'https://twitter.com/i/search/timeline?'. http_build_query([
-                'f' => 'tweets',
-                'vertical' => 'default',
-                'q' => '%23YaMeCanse%20since%3A2014-11-01%20until%3A2015-01-01%20include%3Aretweets&src=typd',
-                'include_available_features' => '1',
-                'include_entities' => 1,
-                'max_position' => $crawler->filter('.stream-container')->attr('data-max-position'),
-                'reset_error_state' => false,
-            ]));
+            $q = 'https://twitter.com/i/search/timeline?f=tweets&vertical=default&q='.$hashtag.'%20since%3A'.$request->get("dateFrom").'%20until%3A'.$request->get("dateTo").'%20include%3Aretweets&src=typd&include_available_features=1&include_entities=1&last_note_ts=3099&max_position=TWEET-'.$crawler->filter('.js-original-tweet')->last()->attr('data-tweet-id').'-'.$crawler->filter('.js-original-tweet')->first()->attr('data-tweet-id').'-BD1UO2FFu9QAAAAAAAAETAAAAAcAAAASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&reset_error_state=false';
+            
+            $client->request("GET", $q);
             $html = json_decode($client->getResponse()->getContent(), true)['items_html'];
             $c2 = new Crawler($html);
-            $response = array_merge($response, $this->parseTweets($c2));
+            $newTweets = $this->parseTweets($c2);
+            $response = array_merge($response, $newTweets);
         }
 
         return [
@@ -103,12 +100,13 @@ class ApiController extends FOSRestController
     private function parseTweets(Crawler $crawler)
     {
 
-        return $crawler->filter('.js-original-tweet')->each(function ($node) {
+        return $crawler->filter('li.stream-item')->each(function ($node) {
             return [
                 'screenname' => $node->filter('.fullname')->text(),
                 'username' => $node->filter('.username b')->text(),
                 'text' => $node->filter('.TweetTextSize.js-tweet-text.tweet-text')->text(),
                 'createdAt' => date('Y-m-d H:i:s', $node->filter('._timestamp.js-short-timestamp')->attr('data-time')),
+                'tweetId' => $node->attr('data-tweet-id'),
             ];
         });
     }
