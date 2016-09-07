@@ -125,4 +125,41 @@ class ApiController extends FOSRestController
         }
         $this->url['param'] .= sprintf('%s%s%s', $paramName, $propertySeparator, $paramValue);
     }
+
+    /**
+     * @View()
+     *
+     * @ApiDoc(
+     *  section="twitter",
+     *  resource=false,
+     *  description="Get a tweets from mongo",
+     *  tags={
+     *    "beta"
+     *  },
+     *  filters={
+     *      {
+     *        "name"="limit",
+     *        "dataType"="int",
+     *        "description"="Max quantity of tweets to return"
+     *      }
+     *  }
+     * )
+     */
+    public function getMongoTweetsAction(Request $request)
+    {
+        $mongoClient = new \MongoClient();
+        $db = $mongoClient->selectDB("twitter");
+        $tweets = $db->tweet->find();
+        $metadatas = $db->tweetMetadata->find();
+        if ($limit = $request->get('limit')) {
+            $tweets->limit($limit);
+        }
+
+        return [
+            'tweets' => iterator_to_array($tweets),
+            'countTweets' => $tweets->count(),
+            'metadata' => iterator_to_array($metadatas),
+            'countMetadatas' => $metadatas->count(),
+        ];
+    }
 }
