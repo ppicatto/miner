@@ -149,10 +149,12 @@ class ApiController extends FOSRestController
     {
         $mongoClient = new \MongoClient();
         $db = $mongoClient->selectDB("twitter");
-        $tweets = $db->tweet->find();
+        
         $metadatas = $db->tweetMetadata->find();
-        if ($limit = $request->get('limit')) {
-            $tweets->limit($limit);
+        if ($limit = $request->query->getInt('limit')) {
+            $tweets = $db->tweet->find()->limit($limit);
+        } else {
+            $tweets = $db->tweet->find();
         }
 
         return [
