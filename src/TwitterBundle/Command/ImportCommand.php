@@ -67,72 +67,91 @@ class ImportCommand extends ContainerAwareCommand
         $mongoClient = new \MongoClient();
         $db = $mongoClient->selectDB("twitter"); 
         $previousMetadata = $db->tweetMetadata->find()->sort(['createdAt'=>-1])->limit(1)->next();
-        if ($previousMetadata) {
+        $newTweets = [];
+        if (!$previousMetadata) {
             $hashtag = '%23' . implode('%28OR%28%23', $hashtag);
             $baseUrl = 'https://twitter.com/search?f=tweets&vertical=default&q='.$hashtag.'%20since%3A'.$dateFrom.'%20until%3A'.$dateTo.'%20include%3Aretweets&src=typd&count='.$max;
 
-            $metadata = [
-                'url' => $baseUrl,
-                'pageNumber' => '1'
-            ];
-            $db->tweetMetadata->insert($metadata);
             $client = new Client();
             $crawler = $client->request('GET', $baseUrl);
             $newTweets = $this->parseTweets($crawler);
+            $metadata = [
+                'firstTweet' => $crawler->filter('.js-original-tweet')->last()->attr('data-item-id'),
+                'lastTweet' => $crawler->filter('.js-original-tweet')->first()->attr('data-item-id'),
+                'url' => $baseUrl,
+                'pageNumber' => 1
+            ];
+            $db->tweetMetadata->insert($metadata);
+            if ($newTweets) {
+                $this->persistTweets($newTweets, $metadata);
+            }
             $response = $newTweets;
             yield [
                 'pageUrl' => $baseUrl,
                 'number' => 1,
                 'items' => count($newTweets)
             ];      
+            $pageNumber = 2;
+        } else {
+            $pageNumber = $previousMetadata['pageNumber'];
         }
+        
         while ($newTweets || $previousMetadata) {
-            $i = 2;
-            if ($newTweets) {
-                foreach ($newTweets as $tweet) {
-                    if (!$db->tweet->findOne(['tweetId' => $tweet['tweetId']])) {
-                        $tweet['metadataId'] = $metadata['_id'];
-                        $db->tweet->insert($tweet);
-                    }
-                }
-            }
-            $i = $i++;
             if ($previousMetadata) {
-                $url = $previousMetadata['url'];
-                $newTweets = $this->getNextPage($url);
+                $metadata = $previousMetadata;
+                $newTweets = $this->getNextPage($metadata['url']);
+                $previousMetadata = null;
             } else {
-                $url = 'https://twitter.com/i/search/timeline?f=tweets&vertical=default&q='.$hashtag.'%20since%3A'.$dateFrom.'%20until%3A'.$dateTo.'%20include%3Aretweets&src=typd&include_available_features=1&include_entities=1&last_note_ts=3099&max_position=TWEET-'.$crawler->filter('.js-original-tweet')->last()->attr('data-item-id').'-'.$crawler->filter('.js-original-tweet')->first()->attr('data-item-id').'-BD1UO2FFu9QAAAAAAAAETAAAAAcAAAASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&reset_error_state=false';
-                $newTweets = $this->getNextPage($url);
+                $metadata = [
+                    'pageNumber' => $pageNumber,
+                    'url' => 'https://twitter.com/i/search/timeline?f=tweets&vertical=default&q='.$hashtag.'%20since%3A'.$dateFrom.'%20until%3A'.$dateTo.'%20include%3Aretweets&src=typd&include_available_features=1&include_entities=1&last_note_ts=3099&max_position=TWEET-'.$crawler->filter('.js-original-tweet')->last()->attr('data-item-id').'-'.$crawler->filter('.js-original-tweet')->first()->attr('data-item-id').'-BD1UO2FFu9QAAAAAAAAETAAAAAcAAAASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&reset_error_state=false',
+                ];
+                $db->tweetMetadata->insert($metadata);
+                $newTweets = $this->getNextPage($metadata['url']);
+            }
+            if ($newTweets['tweets']) {
+                $this->persistTweets($newTweets['tweets'], $metadata);
             }
             yield [
-                'pageUrl' => $url,
-                'number' => $i,
-                'items' => count($newTweets),
+                'pageUrl' => $metadata['url'],
+                'number' => $pageNumber,
+                'items' => count($newTweets['tweets']),
             ];
-            $response = array_merge($response, $newTweets);
+            $response = array_merge($response, $newTweets['tweets']);
+            $pageNumber += 1;
         }
 
         yield [
-            'number' => $i,
-            'items' => count($newTweets),
+            'number' => $pageNumber,
+            'items' => count($newTweets['tweets']),
             'success' => true,
         ]; 
     }
 
-    private function getNextPage($url) {
-        $client = new Client();
+    private function persistTweets($tweets, $metadata) {
         $mongoClient = new \MongoClient();
-        $db = $mongoClient->selectDB("twitter");  
+        $db = $mongoClient->selectDB("twitter"); 
+        foreach ($tweets as $tweet) {
+            dump($tweet['tweetId']);
+            if (!$db->tweet->findOne(['tweetId' => $tweet['tweetId']])) {
+                $tweet['metadataId'] = $metadata['_id'];
+                $db->tweet->insert($tweet);
+            }
+        }
+    }
+    
+    private function getNextPage($url) {
         sleep(4);
-        $metadata = [
-            'url' => $url,
-            'pageNumber' => 1
-        ];
-        $db->tweetMetadata->insert($metadata);
+        $client = new Client();
         $client->request('GET', $url);
         $html = json_decode($client->getResponse()->getContent(), true)['items_html'];
         $crawler = new Crawler($html);
-        return $this->parseTweets($crawler);
+
+        return [
+            'firstTweet' => $crawler->filter('.js-original-tweet')->last()->attr('data-item-id'),
+            'lastTweet' => $crawler->filter('.js-original-tweet')->first()->attr('data-item-id'),
+            'tweets' => $this->parseTweets($crawler),
+        ];
         
     }
 
