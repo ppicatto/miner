@@ -25,7 +25,8 @@
         "nelmio/api-doc-bundle": "^2.13",
         "friendsofsymfony/rest-bundle": "^2.0",
         "fabpot/goutte": "^3.1",
-        "alcaeus/mongo-php-adapter": "^1.0"
+        "alcaeus/mongo-php-adapter": "^1.0",
+        "j7mbo/twitter-api-php": "^1.0"
     },
     "require-dev": {
         "sensio/generator-bundle": "^3.0",
