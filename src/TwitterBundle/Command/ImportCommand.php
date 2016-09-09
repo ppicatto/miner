@@ -104,10 +104,12 @@ class ImportCommand extends ContainerAwareCommand
             } else {
                 $metadata = [
                     'pageNumber' => $pageNumber,
-                    'url' => 'https://twitter.com/i/search/timeline?f=tweets&vertical=default&q='.$hashtag.'%20since%3A'.$dateFrom.'%20until%3A'.$dateTo.'%20include%3Aretweets&src=typd&include_available_features=1&include_entities=1&last_note_ts=3099&max_position=TWEET-'.$crawler->filter('.js-original-tweet')->last()->attr('data-item-id').'-'.$crawler->filter('.js-original-tweet')->first()->attr('data-item-id').'-BD1UO2FFu9QAAAAAAAAETAAAAAcAAAASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&reset_error_state=false',
+                    'url' => 'https://twitter.com/i/search/timeline?f=tweets&vertical=default&q='.$hashtag.'%20since%3A'.$dateFrom.'%20until%3A'.$dateTo.'%20include%3Aretweets&src=typd&include_available_features=1&include_entities=1&last_note_ts=3099&max_position=TWEET-'.$metadata['lastTweet'].'-'.$metadata['firstTweet'].'-BD1UO2FFu9QAAAAAAAAETAAAAAcAAAASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&reset_error_state=false',
                 ];
-                $db->tweetMetadata->insert($metadata);
                 $newTweets = $this->getNextPage($metadata['url']);
+                $metadata['firstTweet'] = $newTweets['firstTweet'];
+                $metadata['lastTweet'] = $newTweets['lastTweet'];
+                $db->tweetMetadata->insert($metadata);
             }
             if ($newTweets['tweets']) {
                 $this->persistTweets($newTweets['tweets'], $metadata);
@@ -132,7 +134,6 @@ class ImportCommand extends ContainerAwareCommand
         $mongoClient = new \MongoClient();
         $db = $mongoClient->selectDB("twitter"); 
         foreach ($tweets as $tweet) {
-            dump($tweet['tweetId']);
             if (!$db->tweet->findOne(['tweetId' => $tweet['tweetId']])) {
                 $tweet['metadataId'] = $metadata['_id'];
                 $db->tweet->insert($tweet);
