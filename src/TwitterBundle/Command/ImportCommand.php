@@ -52,8 +52,8 @@ class ImportCommand extends ContainerAwareCommand
             $dateFrom->modify('+1 day');
             $output->writeln(sprintf('Importing from <info>%s</info> to <info>%s</info>', $startAt->format('Y-m-d'), $dateFrom->format('Y-m-d')));
             foreach ($this->getTweets($input->getOption('hashtag'), $startAt->format('Y-m-d'), $dateFrom->format('Y-m-d'), $input->getOption('max')) as $page) {
-                $output->writeln(sprintf('Importing page <info>%s</info> with <info>%s</info> items', $page['number'], $page['items']));
-                if ($page['pageUrl']) {
+                $output->writeln(sprintf('Imported page <info>%s</info> with <info>%s</info> items', $page['number'], $page['items']));
+                if (isset($page['pageUrl'])) {
                     $output->writeln(sprintf('<info>%s</info>', $page['pageUrl']));
                 }
             }
@@ -68,29 +68,26 @@ class ImportCommand extends ContainerAwareCommand
         $db = $mongoClient->selectDB("twitter"); 
         $previousMetadata = $db->tweetMetadata->find()->sort(['createdAt'=>-1])->limit(1)->next();
         $newTweets = [];
+        $hashtag = '%23' . implode('%28OR%28%23', $hashtag);
         if (!$previousMetadata) {
-            $hashtag = '%23' . implode('%28OR%28%23', $hashtag);
             $baseUrl = 'https://twitter.com/search?f=tweets&vertical=default&q='.$hashtag.'%20since%3A'.$dateFrom.'%20until%3A'.$dateTo.'%20include%3Aretweets&src=typd&count='.$max;
 
             $client = new Client();
             $crawler = $client->request('GET', $baseUrl);
             $newTweets = $this->parseTweets($crawler);
             $metadata = [
-                'firstTweet' => $crawler->filter('.js-original-tweet')->last()->attr('data-item-id'),
-                'lastTweet' => $crawler->filter('.js-original-tweet')->first()->attr('data-item-id'),
+                'firstTweet' => $newTweets[0]['tweetId'],
+                'lastTweet' => end($newTweets)['tweetId'],
                 'url' => $baseUrl,
-                'pageNumber' => 1
+                'pageNumber' => 1,
             ];
             $db->tweetMetadata->insert($metadata);
-            if ($newTweets) {
-                $this->persistTweets($newTweets, $metadata);
-            }
-            $response = $newTweets;
+            $this->persistTweets($newTweets, $metadata);
             yield [
                 'pageUrl' => $baseUrl,
                 'number' => 1,
-                'items' => count($newTweets)
-            ];      
+                'items' => count($newTweets),
+            ];
             $pageNumber = 2;
         } else {
             $pageNumber = $previousMetadata['pageNumber'];
@@ -107,26 +104,25 @@ class ImportCommand extends ContainerAwareCommand
                     'url' => 'https://twitter.com/i/search/timeline?f=tweets&vertical=default&q='.$hashtag.'%20since%3A'.$dateFrom.'%20until%3A'.$dateTo.'%20include%3Aretweets&src=typd&include_available_features=1&include_entities=1&last_note_ts=3099&max_position=TWEET-'.$metadata['lastTweet'].'-'.$metadata['firstTweet'].'-BD1UO2FFu9QAAAAAAAAETAAAAAcAAAASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&reset_error_state=false',
                 ];
                 $newTweets = $this->getNextPage($metadata['url']);
-                $metadata['firstTweet'] = $newTweets['firstTweet'];
-                $metadata['lastTweet'] = $newTweets['lastTweet'];
+                if(!$newTweets) {
+                    break;
+                }
+                $metadata['firstTweet'] = $newTweets[0]['tweetId'];
+                $metadata['lastTweet'] = end($newTweets)['tweetId'];
                 $db->tweetMetadata->insert($metadata);
             }
-            if ($newTweets['tweets']) {
-                $this->persistTweets($newTweets['tweets'], $metadata);
-            }
+            $this->persistTweets($newTweets, $metadata);
             yield [
                 'pageUrl' => $metadata['url'],
                 'number' => $pageNumber,
-                'items' => count($newTweets['tweets']),
+                'items' => count($newTweets),
             ];
-            $response = array_merge($response, $newTweets['tweets']);
             $pageNumber += 1;
         }
 
         yield [
             'number' => $pageNumber,
-            'items' => count($newTweets['tweets']),
-            'success' => true,
+            'items' => count($newTweets)
         ]; 
     }
 
@@ -148,11 +144,7 @@ class ImportCommand extends ContainerAwareCommand
         $html = json_decode($client->getResponse()->getContent(), true)['items_html'];
         $crawler = new Crawler($html);
 
-        return [
-            'firstTweet' => $crawler->filter('.js-original-tweet')->last()->attr('data-item-id'),
-            'lastTweet' => $crawler->filter('.js-original-tweet')->first()->attr('data-item-id'),
-            'tweets' => $this->parseTweets($crawler),
-        ];
+        return $this->parseTweets($crawler);
         
     }
 
