@@ -2,11 +2,12 @@
 # Set parameters here that may be different on each deployment target of the app, e.g. development, staging, production.
 # http://symfony.com/doc/current/best_practices/configuration.html#infrastructure-related-configuration
 parameters:
-    database_host:     127.0.0.1
-    database_port:     ~
-    database_name:     symfony
-    database_user:     root
-    database_password: ~
+    database:
+        host:   127.0.0.1
+        port:   ~
+        name:   symfony
+        user:   root
+        password: ~
     # You should uncomment this if you want use pdo_sqlite
     # database_path: "%kernel.root_dir%/data.db3"
 
@@ -18,7 +19,7 @@ parameters:
     # A secret key that's used to generate certain security-related tokens
     secret:            ThisTokenIsNotSoSecretChangeIt
 
-    twitter:
+    twitter_connection:
         oauth_access_token: oauthAccessToken
         oauth_access_token_secret: oauthAccessTokenSecret
         customer_key: customerKey

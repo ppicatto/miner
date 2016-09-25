@@ -26,21 +26,27 @@ class ImportHandler {
     /**
      * @var string
      */
-    private $firstId = null;
+    private $firstExternalId = null;
 
     /**
      * @var string
      */
-    private $lastId = null;
+    private $lastExternalId = null;
+
+    /**
+     * @var array
+     */
+    private $twitterConnection;
 
     /**
      * @var \MongoDB 
      */
     private $db = null;
 
-    public function __construct() {
+    public function __construct($twitterConnection, $dbParams) {
         $mongoClient = new \MongoClient();
-        $this->db = $mongoClient->selectDB("twitter");
+        $this->db = $mongoClient->selectDB($dbParams['name']);
+        $this->twitterConnection = $twitterConnection;
     }
 
     /**
@@ -51,7 +57,8 @@ class ImportHandler {
      *
      * @return string
      */
-    private function urlEncode(array $hashtag = [], \DateTime $dateFrom, \DateTime $dateTo, int $max = 200) {
+    private function urlEncode(array $hashtag = [], \DateTime $dateFrom, \DateTime $dateTo, int $max = 200): string
+    {
         return sprintf('%s&include:retweets&src=typd&count=%s', str_replace(
             [':', '&', '#'],
             ['%3A', '%20', '%23'],
@@ -72,7 +79,7 @@ class ImportHandler {
      *
      * @return array
      */
-    private function getFirstPage(array $hashtag, \DateTime $dateFrom, \DateTime $dateTo, int $max = 200)
+    private function getFirstPage(array $hashtag, \DateTime $dateFrom, \DateTime $dateTo, int $max = 200): array
     {
         $client = new Client();
 
@@ -89,21 +96,15 @@ class ImportHandler {
      *
      * @return array
      */
-    private function getNextPage(array $hashtag, \DateTime $dateFrom, \DateTime $dateTo, int $max)
+    private function getNextPage(array $hashtag, \DateTime $dateFrom, \DateTime $dateTo, int $max): array
     {
         sleep(4);
         $client = new Client();
-        dump(sprintf(
-            'https://twitter.com/i/search/timeline?%s&f=tweets&vertical=default&include_available_features=1&include_entities=1&last_note_ts=3099&max_position=TWEET-%s-%s-BD1UO2FFu9QAAAAAAAAETAAAAAcAAAASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&reset_error_state=false',
-            $this->urlEncode($hashtag, $dateFrom, $dateTo, $max),
-            $this->lastId,
-            $this->firstId
-        ));
         $client->request('GET', sprintf(
             'https://twitter.com/i/search/timeline?%s&f=tweets&vertical=default&include_available_features=1&include_entities=1&last_note_ts=3099&max_position=TWEET-%s-%s-BD1UO2FFu9QAAAAAAAAETAAAAAcAAAASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&reset_error_state=false',
             $this->urlEncode($hashtag, $dateFrom, $dateTo, $max),
-            $this->lastId,
-            $this->firstId
+            $this->lastExternalId,
+            $this->firstExternalId
         ));
         $html = json_decode($client->getResponse()->getContent(), true)['items_html'];
         $crawler = new Crawler($html);
@@ -113,10 +114,12 @@ class ImportHandler {
 
     /**
      * @param string $twitterPlaceId
+     *
+     * @param return $placeId
      */
-    private function getCoordinates($twitterPlaceId) {
+    private function getCoordinates($twitterPlaceId): string {
         if (!$twitterPlaceId) {
-            return null;
+            return 'n/a';
         }
 
         if ($place = $this->db->places->findOne(['id' => $twitterPlaceId])) {
@@ -124,7 +127,7 @@ class ImportHandler {
             return $place['_id'];
         }
         $client = new Client();
-        $twitter = new TwitterAPIExchange($this->getContainer()->getParameter('twitter'));
+        $twitter = new TwitterAPIExchange($this->twitterConnection);
 
         try {
             $response = json_decode($twitter
@@ -150,7 +153,7 @@ class ImportHandler {
      *
      * @return array
      */
-    private function parseTweets(Crawler $crawler)
+    private function parseTweets(Crawler $crawler): array
     {
         return $crawler->filter('li.stream-item')->each(function ($node) {
             $placeId = null;
@@ -164,7 +167,7 @@ class ImportHandler {
                 'username' => $node->filter('.username b')->text(),
                 'text' => $node->filter('.TweetTextSize.js-tweet-text.tweet-text')->text(),
                 'createdAt' => date('Y-m-d H:i:s', $node->filter('._timestamp.js-short-timestamp')->attr('data-time')),
-                'tweetId' => $node->attr('data-item-id'),
+                'externalId' => $node->attr('data-item-id'),
                 'place' => $this->getCoordinates($placeId)
             ];
         });
@@ -176,16 +179,15 @@ class ImportHandler {
      * @param array $hashtag
      * @param int $max
      */
-    public function importTweets(\DateTime $dateFrom, \DateTime $dateTo, array $hashtag = [], int $max = 200)
+    public function importTweets(\DateTime $dateFrom, \DateTime $dateTo, array $hashtag = [], int $max = 200): \Generator
     {
         if ($previousMetadata = $this->db->tweetMetadata->find()->sort(['createdAt' => -1])->limit(1)->next()) {
             $this->page = $previousMetadata['page'];
-            $dateFrom = $previousMetadata['importedDate'];
-            $this->firstId = $previousMetadata['firstId'];
-            $this->lastId = $previousMetadata['lastId'];
+            $dateFrom = new \DateTime($previousMetadata['importedDate']['date']);
+            $this->firstExternalId = $previousMetadata['firstExternalId'];
+            $this->lastExternalId = $previousMetadata['lastExternalId'];
             $this->page++;
         }
-
         while ($dateFrom < $dateTo) {
             $startAt = clone $dateFrom;
             $dateFrom->modify('+1 day');
@@ -218,14 +220,14 @@ class ImportHandler {
     }
 
     private function persistData($tweets, $metadata) {
-        $this->firstId = $tweets[0]['tweetId'];
-        $this->lastId = end($tweets)['tweetId'];
-        $metadata['firstId'] = $this->firstId;
-        $metadata['lastId'] = $this->lastId;
-        dump($metadata);
+        $this->firstExternalId = $tweets[0]['externalId'];
+        $this->lastExternalId = end($tweets)['externalId'];
+        $metadata['firstExternalId'] = $this->firstExternalId;
+        $metadata['lastExternalId'] = $this->lastExternalId;
+
         $this->db->tweetMetadata->insert($metadata);
         foreach ($tweets as $tweet) {
-            if (!$this->db->tweet->findOne(['tweetId' => $tweet['tweetId']])) {
+            if (!$this->db->tweet->findOne(['externalId' => $tweet['externalId']])) {
                 $tweet['metadataId'] = $metadata['_id'];
                 $this->db->tweet->insert($tweet);
             }
