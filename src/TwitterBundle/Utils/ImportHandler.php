@@ -187,7 +187,6 @@ class ImportHandler {
             $this->firstExternalId = $previousMetadata['firstExternalId'];
             $this->lastExternalId = $previousMetadata['lastExternalId'];
             $this->page++;
-            dump($previousMetadata);
         }
         while ($dateFrom < $dateTo) {
             $startAt = clone $dateFrom;
