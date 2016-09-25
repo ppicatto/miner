@@ -145,7 +145,7 @@ class ImportHandler {
         }
         dump($response->errors[0]->message . sprintf(' waiting %s seconds', 60));
         sleep(60);
-        $this->getCoordinates($twitterPlaceId);
+        return $this->getCoordinates($twitterPlaceId);
     }
 
     /**
