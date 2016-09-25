@@ -181,12 +181,13 @@ class ImportHandler {
      */
     public function importTweets(\DateTime $dateFrom, \DateTime $dateTo, array $hashtag = [], int $max = 200): \Generator
     {
-        if ($previousMetadata = $this->db->tweetMetadata->find()->sort(['createdAt' => -1])->limit(1)->next()) {
+        if ($previousMetadata = $this->db->tweetMetadata->find()->sort(['importedDate' => -1])->limit(1)->next()) {
             $this->page = $previousMetadata['page'];
             $dateFrom = new \DateTime($previousMetadata['importedDate']['date']);
             $this->firstExternalId = $previousMetadata['firstExternalId'];
             $this->lastExternalId = $previousMetadata['lastExternalId'];
             $this->page++;
+            dump($previousMetadata);
         }
         while ($dateFrom < $dateTo) {
             $startAt = clone $dateFrom;
