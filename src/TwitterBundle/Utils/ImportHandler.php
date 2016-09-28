@@ -117,8 +117,8 @@ class ImportHandler {
      *
      * @param return $placeId
      */
-    private function getCoordinates($twitterPlaceId): string {
-        if (!$twitterPlaceId) {
+    private function getCoordinates($twitterPlaceId = 'n/a'): string {
+        if ('n/a' === $twitterPlaceId ) {
             return 'n/a';
         }
 
