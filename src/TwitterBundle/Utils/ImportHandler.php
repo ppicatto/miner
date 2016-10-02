@@ -113,12 +113,12 @@ class ImportHandler {
     }
 
     /**
-     * @param string $twitterPlaceId
+     * @param string|null $twitterPlaceId
      *
      * @param return $placeId
      */
     private function getCoordinates($twitterPlaceId = 'n/a'): string {
-        if ('n/a' === $twitterPlaceId ) {
+        if ('n/a' === $twitterPlaceId || null === $twitterPlaceId) {
             return 'n/a';
         }
 
@@ -196,7 +196,6 @@ class ImportHandler {
             } else {
                 $tweets = $this->getNextPage($hashtag, $startAt, $dateFrom, $max);
             }
-
             if (!$tweets) {
                 $this->page = 1;
                 continue;

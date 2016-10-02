@@ -70,14 +70,13 @@ class ApiController extends FOSRestController
         $hashtag = '%23' . implode( '%28OR%28%23', $hashtag );
         $baseUrl = 'https://twitter.com/search?f=tweets&vertical=default&q='.$hashtag.'%20since%3A'.$request->get("dateFrom").'%20until%3A'.$request->get("dateTo").'%20include%3Aretweets&src=typd&count='.$request->get("max");
         $client = new Client();
-        dump($baseUrl);
         $crawler = $client->request('GET', $baseUrl);
         $newTweets = $this->parseTweets($crawler);
         $response = $newTweets;
         while ($newTweets) {
             sleep(1);
             $q = 'https://twitter.com/i/search/timeline?f=tweets&vertical=default&q='.$hashtag.'%20since%3A'.$request->get("dateFrom").'%20until%3A'.$request->get("dateTo").'%20include%3Aretweets&src=typd&include_available_features=1&include_entities=1&last_note_ts=3099&max_position=TWEET-'.$crawler->filter('.js-original-tweet')->last()->attr('data-tweet-id').'-'.$crawler->filter('.js-original-tweet')->first()->attr('data-tweet-id').'-BD1UO2FFu9QAAAAAAAAETAAAAAcAAAASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&reset_error_state=false';
-            
+
             $client->request("GET", $q);
             $html = json_decode($client->getResponse()->getContent(), true)['items_html'];
             $c2 = new Crawler($html);

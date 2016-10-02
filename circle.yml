@@ -1,0 +1,8 @@
+machine:
+  php:
+    version: 7.0.4
+dependencies:
+  pre:
+    - pecl install mongo
+  override:
+    - composer install --prefer-dist --optimize-autoloader --no-interaction --no-scripts
